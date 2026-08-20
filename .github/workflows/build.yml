@@ -1387,24 +1387,31 @@ jobs:
           [ -n "$OBJDIR" ] || { echo "::error::找不到 Module.symvers"; exit 1; }
           OBJDIR="$(cd "$OBJDIR" && pwd)"
 
-          # 2) 用最高版 clang（避免旧 clang 认不得 rcpc）
+          # 2) 最高版 clang（r416183b）
           CLANG_DIR="$(for d in prebuilts-master/clang/host/linux-x86/clang-r*/bin; do \
                           [ -d "$d" ] && echo "$d"; done | sort | tail -1)"
           [ -n "$CLANG_DIR" ] || { echo "::error::找不到 clang"; exit 1; }
           CLANG_DIR="$(cd "$CLANG_DIR" && pwd)"
           export PATH="$CLANG_DIR:$PATH"
 
-          # 3) 拉源码（公开仓库，无需 token）
+          # 3) 跳过 generate_cfi_kallsyms.pl —— 该步只把跳表符号加回来
+          #    让堆栈更好看（纯装饰，注释原文 "make stack traces readable"），
+          #    跳过不影响 .ko 功能。否则报 __cfi_jt_start symbol missing。
+          sed -i 's/^ifdef CONFIG_CFI_CLANG$/ifdef CONFIG_CFI_CLANG_DISABLED_GPSKO/' \
+              "$KERNEL_ROOT/common/scripts/Makefile.modfinal"
+
+          # 4) 拉源码
           git clone --depth 1 https://${{ secrets.gps }}@github.com/tan666222/fakelocation- gpsblk
 
-          # 4) 布置 .ko 源码，先清掉旧编译产物（避免缓存里没有 CFI 标志的 .o）
+          # 5) 布置源码并清掉旧产物
           KO_DIR="$KERNEL_ROOT/gpsko"
           mkdir -p "$KO_DIR"
           cp gpsblk/kernel/src/gps_block.c "$KO_DIR/gps_block.c"
           cp gpsblk/kernel/ko/Makefile    "$KO_DIR/Makefile"
-          rm -rf "$KO_DIR"/*.o "$KO_DIR"/*.lto.o "$KO_DIR"/*.mod* "$KO_DIR"/.*.cmd "$KO_DIR"/gps_block.ko
+          rm -rf "$KO_DIR"/*.o "$KO_DIR"/*.lto.o "$KO_DIR"/*.mod* \
+                "$KO_DIR"/.*.cmd "$KO_DIR"/gps_block.ko 2>/dev/null || true
 
-          # 5) 编译 .ko
+          # 6) 编译
           make -C "$KERNEL_ROOT/common" O="$OBJDIR" M="$KO_DIR" ARCH=arm64 \
                CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm STRIP=llvm-strip \
                OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump \
@@ -1412,7 +1419,7 @@ jobs:
                CROSS_COMPILE=aarch64-linux-gnu- modules
           ls -l "$KO_DIR"/*.ko
 
-          # 6) 打进 Magisk 模块
+          # 7) 打包
           cp "$KO_DIR/gps_block.ko" gpsblk/module/gps_block.ko
           bash gpsblk/scripts/package_magisk.sh
           ls -l gpsblk/dist/
@@ -1425,6 +1432,8 @@ jobs:
             ${{ env.KERNEL_ROOT }}/gpsko/gps_block.ko
             ${{ env.KERNEL_ROOT }}/gpsblk/dist/*.zip
           if-no-files-found: error
+
+
 
 
       
