@@ -1385,7 +1385,9 @@ jobs:
 
           OBJDIR="$(find out -name Module.symvers -type f | head -1 | xargs dirname)"
           [ -n "$OBJDIR" ] || { echo "::error::out 里找不到 Module.symvers"; exit 1; }
+          OBJDIR="$(cd "$OBJDIR" && pwd)"     # ← 新增这一行
           echo "OBJDIR=$OBJDIR"
+
 
           git clone --depth 1 https://${{ secrets.gps }}@github.com/tan666222/fakelocation- gpsblk
           KO_DIR="$KERNEL_ROOT/gpsko"
