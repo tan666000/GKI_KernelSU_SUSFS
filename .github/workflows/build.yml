@@ -208,7 +208,7 @@ jobs:
           git config --global user.email "BuildGkiKernel@gmail.com"
 
       - name: 克隆依赖仓库
-        if: inputs.enable_susfs
+        #if: inputs.enable_susfs
         run: |
           ANYKERNEL_BRANCH="gki-2.0"
           SUSFS_BRANCH="gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
