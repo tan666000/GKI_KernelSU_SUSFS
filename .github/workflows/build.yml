@@ -1393,7 +1393,7 @@ jobs:
           # gcc 认不得 -fsanitize=cfi / -fsplit-lto-unit 等参数会直接报错。
           CLANG_BIN="$(find prebuilts-master -path '*clang-r*/bin/clang' -type f | head -1)"
           [ -n "$CLANG_BIN" ] || { echo "::error::找不到 clang 预编译工具链"; exit 1; }
-          CLANG_DIR="$(dirname "$CLANG_BIN")"
+          CLANG_DIR="$(cd "$(dirname "$CLANG_BIN")" && pwd)"   # 转绝对路径
           echo "clang=$CLANG_BIN"
           export PATH="$CLANG_DIR:$PATH"
 
