@@ -1377,6 +1377,38 @@ jobs:
             echo "当前 KSU 最新提交日期: ${KSU_LATEST_COMMIT_DATE}"
             echo "当前 SUSFS 最新提交日期: ${SUSFS_LATEST_COMMIT_DATE}"
             echo "如果日期不同或相差过远则补丁失效、编译失败"
+      - name: 编译并打包 gps_block.ko（方式A，复用已编译内核）
+        working-directory: ${{ env.KERNEL_ROOT }}
+        run: |
+          set -ex
+          sudo apt-get install -y gcc-aarch64-linux-gnu >/dev/null
+
+          OBJDIR="$(find out -name Module.symvers -type f | head -1 | xargs dirname)"
+          [ -n "$OBJDIR" ] || { echo "::error::out 里找不到 Module.symvers"; exit 1; }
+          echo "OBJDIR=$OBJDIR"
+
+          git clone --depth 1 https://${{ secrets.gps }}@github.com/tan666222/fakelocation- gpsblk
+          KO_DIR="$KERNEL_ROOT/gpsko"
+          mkdir -p "$KO_DIR"
+          cp gpsblk/kernel/src/gps_block.c "$KO_DIR/gps_block.c"
+          cp gpsblk/kernel/ko/Makefile    "$KO_DIR/Makefile"
+
+          make -C "$KERNEL_ROOT/common" O="$OBJDIR" M="$KO_DIR" \
+               ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules
+          ls -l "$KO_DIR"/
+
+          cp "$KO_DIR/gps_block.ko" gpsblk/module/gps_block.ko
+          bash gpsblk/scripts/package_magisk.sh
+          ls -l gpsblk/dist/
+
+      - name: 上传 gps_block.ko 与模块 zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: gps_block_ko
+          path: |
+            ${{ env.KERNEL_ROOT }}/gpsko/gps_block.ko
+            ${{ env.KERNEL_ROOT }}/gpsblk/dist/*.zip
+          if-no-files-found: error
 
       # - name: 应用 KPM 补丁 (SukiSU/ReSukiSU/Next)
       #   if: startsWith(inputs.use_kpm, 'patched') && (inputs.ksu_variant == 'SukiSU' || inputs.ksu_variant == 'ReSukiSU' || inputs.ksu_variant == 'Next')
