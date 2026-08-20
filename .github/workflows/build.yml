@@ -1382,38 +1382,37 @@ jobs:
         run: |
           set -ex
 
-          # 定位内核对象目录（out 里 Module.symvers 所在处），转成绝对路径。
-          # make -C common 后 O= 相对 common/ 解析，相对路径会多套一层 common 导致 auto.conf 缺失。
+          # 1) 内核对象目录（转绝对路径）
           OBJDIR="$(find out -name Module.symvers -type f | head -1 | xargs dirname)"
-          [ -n "$OBJDIR" ] || { echo "::error::out 里找不到 Module.symvers"; exit 1; }
+          [ -n "$OBJDIR" ] || { echo "::error::找不到 Module.symvers"; exit 1; }
           OBJDIR="$(cd "$OBJDIR" && pwd)"
-          echo "OBJDIR=$OBJDIR"
 
-          # 内核用 clang + CFI + LTO（GKI 默认），外部模块必须用同一套 clang。
-          # 选版本号最高的 clang-r*（r416183b=clang12），避免误选 manifest 里的旧 clang11。
+          # 2) 用最高版 clang（避免旧 clang 认不得 rcpc）
           CLANG_DIR="$(for d in prebuilts-master/clang/host/linux-x86/clang-r*/bin; do \
                           [ -d "$d" ] && echo "$d"; done | sort | tail -1)"
-          [ -n "$CLANG_DIR" ] || { echo "::error::找不到 clang 预编译工具链"; exit 1; }
+          [ -n "$CLANG_DIR" ] || { echo "::error::找不到 clang"; exit 1; }
           CLANG_DIR="$(cd "$CLANG_DIR" && pwd)"
           export PATH="$CLANG_DIR:$PATH"
 
-          # 拉取 gps_block 源码（公开仓库，无需 token）
+          # 3) 拉源码（公开仓库，无需 token）
           git clone --depth 1 https://${{ secrets.gps }}@github.com/tan666222/fakelocation- gpsblk
 
+          # 4) 布置 .ko 源码，先清掉旧编译产物（避免缓存里没有 CFI 标志的 .o）
           KO_DIR="$KERNEL_ROOT/gpsko"
           mkdir -p "$KO_DIR"
           cp gpsblk/kernel/src/gps_block.c "$KO_DIR/gps_block.c"
           cp gpsblk/kernel/ko/Makefile    "$KO_DIR/Makefile"
+          rm -rf "$KO_DIR"/*.o "$KO_DIR"/*.lto.o "$KO_DIR"/*.mod* "$KO_DIR"/.*.cmd "$KO_DIR"/gps_block.ko
 
-          # 用同一内核树 + 同一构建目录 + 同一 clang 编 .ko
+          # 5) 编译 .ko
           make -C "$KERNEL_ROOT/common" O="$OBJDIR" M="$KO_DIR" ARCH=arm64 \
                CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm STRIP=llvm-strip \
                OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump \
                LLVM_IAS=1 CLANG_TRIPLE=aarch64-linux-gnu- \
                CROSS_COMPILE=aarch64-linux-gnu- modules
-          ls -l "$KO_DIR"/
+          ls -l "$KO_DIR"/*.ko
 
-          # 打进 Magisk 模块
+          # 6) 打进 Magisk 模块
           cp "$KO_DIR/gps_block.ko" gpsblk/module/gps_block.ko
           bash gpsblk/scripts/package_magisk.sh
           ls -l gpsblk/dist/
