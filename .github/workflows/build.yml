@@ -1377,7 +1377,7 @@ jobs:
             echo "当前 KSU 最新提交日期: ${KSU_LATEST_COMMIT_DATE}"
             echo "当前 SUSFS 最新提交日期: ${SUSFS_LATEST_COMMIT_DATE}"
             echo "如果日期不同或相差过远则补丁失效、编译失败"
-            - name: 编译并打包 gps_block.ko（方式A，复用已编译内核）
+      - name: 编译并打包 gps_block.ko（方式A，复用已编译内核）
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           set -ex
