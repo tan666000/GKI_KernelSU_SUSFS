@@ -1377,28 +1377,42 @@ jobs:
             echo "当前 KSU 最新提交日期: ${KSU_LATEST_COMMIT_DATE}"
             echo "当前 SUSFS 最新提交日期: ${SUSFS_LATEST_COMMIT_DATE}"
             echo "如果日期不同或相差过远则补丁失效、编译失败"
-      - name: 编译并打包 gps_block.ko（方式A，复用已编译内核）
+            - name: 编译并打包 gps_block.ko（方式A，复用已编译内核）
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           set -ex
-          sudo apt-get install -y gcc-aarch64-linux-gnu >/dev/null
 
+          # 定位内核对象目录（out 里 Module.symvers 所在处），转成绝对路径。
+          # 关键：make -C common 后 O= 相对 common/ 解析，相对路径会多套一层 common 导致 auto.conf 缺失。
           OBJDIR="$(find out -name Module.symvers -type f | head -1 | xargs dirname)"
           [ -n "$OBJDIR" ] || { echo "::error::out 里找不到 Module.symvers"; exit 1; }
-          OBJDIR="$(cd "$OBJDIR" && pwd)"     # ← 新增这一行
+          OBJDIR="$(cd "$OBJDIR" && pwd)"
           echo "OBJDIR=$OBJDIR"
 
+          # 内核用 clang + CFI + LTO（GKI 默认），外部模块必须用同一套 clang，
+          # gcc 认不得 -fsanitize=cfi / -fsplit-lto-unit 等参数会直接报错。
+          CLANG_BIN="$(find prebuilts-master -path '*clang-r*/bin/clang' -type f | head -1)"
+          [ -n "$CLANG_BIN" ] || { echo "::error::找不到 clang 预编译工具链"; exit 1; }
+          CLANG_DIR="$(dirname "$CLANG_BIN")"
+          echo "clang=$CLANG_BIN"
+          export PATH="$CLANG_DIR:$PATH"
 
+          # 拉取 gps_block 源码（公开仓库，无需 token）
           git clone --depth 1 https://${{ secrets.gps }}@github.com/tan666222/fakelocation- gpsblk
+        
           KO_DIR="$KERNEL_ROOT/gpsko"
           mkdir -p "$KO_DIR"
           cp gpsblk/kernel/src/gps_block.c "$KO_DIR/gps_block.c"
           cp gpsblk/kernel/ko/Makefile    "$KO_DIR/Makefile"
 
-          make -C "$KERNEL_ROOT/common" O="$OBJDIR" M="$KO_DIR" \
-               ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules
+          # 用同一内核树 + 同一构建目录 + 同一 clang 编 .ko
+          make -C "$KERNEL_ROOT/common" O="$OBJDIR" M="$KO_DIR" ARCH=arm64 \
+               CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm STRIP=llvm-strip \
+               OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump \
+               CROSS_COMPILE=aarch64-linux-gnu- modules
           ls -l "$KO_DIR"/
 
+          # 打进 Magisk 模块
           cp "$KO_DIR/gps_block.ko" gpsblk/module/gps_block.ko
           bash gpsblk/scripts/package_magisk.sh
           ls -l gpsblk/dist/
@@ -1411,6 +1425,8 @@ jobs:
             ${{ env.KERNEL_ROOT }}/gpsko/gps_block.ko
             ${{ env.KERNEL_ROOT }}/gpsblk/dist/*.zip
           if-no-files-found: error
+
+      
 
       # - name: 应用 KPM 补丁 (SukiSU/ReSukiSU/Next)
       #   if: startsWith(inputs.use_kpm, 'patched') && (inputs.ksu_variant == 'SukiSU' || inputs.ksu_variant == 'ReSukiSU' || inputs.ksu_variant == 'Next')
