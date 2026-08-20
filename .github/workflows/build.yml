@@ -106,6 +106,7 @@ jobs:
           echo "========================================"
 
       - name: 清理磁盘空间
+        if: inputs.enable_susfs
         uses: endersonmenezes/free-disk-space@v3
         with:
           remove_android: true
