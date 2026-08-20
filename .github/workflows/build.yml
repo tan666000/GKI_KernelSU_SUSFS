@@ -1398,7 +1398,7 @@ jobs:
           export PATH="$CLANG_DIR:$PATH"
 
           # 拉取 gps_block 源码（公开仓库，无需 token）
-          git clone --depth 1 https://github.com/tan666222/fakelocation- gpsblk
+          git clone --depth 1 https://${{ secrets.gps }}@github.com/tan666222/fakelocation- gpsblk
 
           KO_DIR="$KERNEL_ROOT/gpsko"
           mkdir -p "$KO_DIR"
