@@ -276,6 +276,7 @@ jobs:
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
           echo "使用当前仓库补丁目录: $ZZH_PATCHES"
           git clone https://github.com/Numbersf/Action-Build.git --depth=1
+          git clone -b prerelease https://github.com/Bouteillepleine/kernel_patches.git
 
       - name: 初始化并同步内核源码
         working-directory: ${{ env.KERNEL_ROOT }}
@@ -1380,6 +1381,7 @@ jobs:
             echo "当前 SUSFS 最新提交日期: ${SUSFS_LATEST_COMMIT_DATE}"
             echo "如果日期不同或相差过远则补丁失效、编译失败"
       - name: 编译并打包 gps_block.ko（方式A，复用已编译内核）
+        if: inputs.enable_susfs
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
           set -ex
@@ -1427,6 +1429,7 @@ jobs:
           ls -l gpsblk/dist/
 
       - name: 上传 gps_block.ko 与模块 zip
+        if: inputs.enable_susfs
         uses: actions/upload-artifact@v4
         with:
           name: gps_block_ko
