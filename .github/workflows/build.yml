@@ -1020,7 +1020,15 @@ jobs:
           fi
 
           echo "=== NTSync 补丁与配置注入完成 ==="
-
+      - name: 应用 NoMount 补丁 (all)
+        working-directory: ${{ env.KERNEL_ROOT }}
+        env:
+         COMMON_KERNEL_FOLDER: ${{ env.KERNEL_ROOT }}/common
+         BOUTEILLE_KERNEL_PATCHES_FOLDER: ${{ env.KERNEL_PATCHES }}
+         KSU_FOLDER: ${{ env.KERNEL_ROOT }}/KernelSU
+         GITHUB_WORKSPACE: ${{ env.GITHUB_WORKSPACE }}
+        run: |
+          bash "$KERNEL_PATCHES/apply_nomount_stack.sh" all
       - name: 应用 Unicode 绕过修复
         if: inputs.enable_susfs
         working-directory: ${{ env.KERNEL_ROOT }}/common
